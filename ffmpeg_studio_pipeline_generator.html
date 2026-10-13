@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FFmpeg Studio & Pipeline Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darker: '#090d16',
+                        dark: '#0f172a',
+                        card: '#1e293b',
+                        accent: '#3b82f6',
+                        accentHover: '#2563eb'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Inter Font & Lucide Icons UMD CDN -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="bg-darker text-slate-100 min-h-screen flex flex-col antialiased selection:bg-accent selection:text-white">
+
+    <header class="border-b border-slate-800 bg-dark/80 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    <i data-lucide="video" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">FFmpeg Studio Pro</h1>
+                    <p class="text-xs text-slate-400">Interactive Pipeline, AI Assistant & Studio Editor</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button id="selectOutputBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700">Select Output Folder</button>
+                <div id="outputFolderName" class="text-xs text-slate-400 truncate max-w-xs">No folder selected</div>
+                <button id="runAppBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center space-x-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-95 cursor-pointer">
+                    <i data-lucide="play" class="w-4 h-4 fill-white"></i>
+                    <span>Run Application</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <!-- LEFT PANEL: Editing Tools, Upload & AI Assistant (5 Cols) -->
+        <div class="lg:col-span-5 flex flex-col space-y-6">
+            
+            <!-- Left Panel Navigation Tabs -->
+            <div class="flex bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
+                <button data-left-tab="media" class="left-tab-btn flex-1 py-2 text-xs font-semibold rounded-xl transition-all bg-blue-600 text-white shadow-md flex items-center justify-center space-x-2">
+                    <i data-lucide="film" class="w-3.5 h-3.5"></i>
+                    <span>Media & Preview</span>
+                </button>
+                <button data-left-tab="tools" class="left-tab-btn flex-1 py-2 text-xs font-semibold rounded-xl transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center space-x-2">
+                    <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
+                    <span>Editing Tools</span>
+                </button>
+                <button data-left-tab="ai" class="left-tab-btn flex-1 py-2 text-xs font-semibold rounded-xl transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center space-x-2">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>AI Assistant</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: Media Upload & Preview -->
+            <div id="tabContent_media" class="left-tab-content flex flex-col space-y-6">
+                <!-- Source Media Input -->
+                <div class="bg-card border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden group">
+                    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center">
+                        <i data-lucide="upload-cloud" class="w-4 h-4 mr-2 text-blue-400"></i> Source Media Input
+                    </h2>
+                    
+                    <div id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-xl p-6 text-center cursor-pointer transition-all bg-slate-900/50 hover:bg-slate-900 flex flex-col items-center justify-center">
+                        <input type="file" id="videoUpload" accept="video/*" class="hidden">
+                        <div class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3 text-blue-400">
+                            <i data-lucide="video" class="w-5 h-5"></i>
+                        </div>
+                        <p class="text-sm font-medium text-slate-200 mb-1">Drag & drop your video here</p>
+                        <p class="text-xs text-slate-400 mb-3">Supports MP4, MOV, MKV, WebM</p>
+                        <button type="button" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-colors">
+                            Browse Files
+                        </button>
+                    </div>
+
+                    <div id="fileInfo" class="hidden mt-4 p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                        <div class="flex items-center space-x-3 overflow-hidden">
+                            <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                            </div>
+                            <div class="truncate">
+                                <p id="fileName" class="text-xs font-semibold text-slate-200 truncate">sample_input.mp4</p>
+                                <p id="fileMeta" class="text-[10px] text-slate-400">1920x1080 • 30.0 fps</p>
+                            </div>
+                        </div>
+                        <button id="removeFile" class="text-slate-500 hover:text-red-400 p-1 transition-colors">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Video Preview Player -->
+                <div class="bg-card border border-slate-800 rounded-2xl p-6 shadow-xl flex-1 flex flex-col">
+                    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center">
+                        <i data-lucide="play-square" class="w-4 h-4 mr-2 text-blue-400"></i> Live Object Preview
+                    </h2>
+                    <div class="relative w-full bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-slate-800">
+                        <video id="videoPreview" class="w-full h-full object-contain hidden" controls></video>
+                        <div id="previewPlaceholder" class="text-center p-6 text-slate-500 flex flex-col items-center">
+                            <i data-lucide="video-off" class="w-10 h-10 mb-2 opacity-40"></i>
+                            <p class="text-xs">No media loaded for preview</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Editing Tools Panel -->
+            <div id="tabContent_tools" class="left-tab-content hidden flex flex-col space-y-6">
+                <div class="bg-card border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+                    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center">
+                        <i data-lucide="scissors" class="w-4 h-4 mr-2 text-blue-400"></i> In-App Editing Tools
+                    </h2>
+
+                    <!-- Trim Range -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-medium text-slate-400">Trim Range (Seconds)</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <span class="text-[10px] text-slate-500">Start Time (-ss)</span>
+                                <input type="number" id="edit_trimStart" value="0" min="0" step="0.1" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                            </div>
+                            <div>
+                                <span class="text-[10px] text-slate-500">Duration (-to / -t)</span>
+                                <input type="number" id="edit_trimDuration" value="10" min="1" step="0.1" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Crop & Aspect Ratio -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-medium text-slate-400">Video Crop / Aspect Ratio</label>
+                        <select id="edit_crop" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                            <option value="none">Original (No Crop)</option>
+                            <option value="1:1">Square (1:1 - Instagram/TikTok)</option>
+                            <option value="9:16">Vertical (9:16 - Reels/Shorts)</option>
+                            <option value="4:3">Classic (4:3)</option>
+                        </select>
+                    </div>
+
+                    <!-- Watermark Text Overlay -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-medium text-slate-400">Watermark Text Overlay</label>
+                        <input type="text" id="edit_watermark" placeholder="e.g. © FFmpeg Studio" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <!-- Video Filters (Speed & Brightness) -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Playback Speed</label>
+                            <select id="edit_speed" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                                <option value="1.0">Normal (1.0x)</option>
+                                <option value="0.5">Slow Motion (0.5x)</option>
+                                <option value="2.0">Fast Forward (2.0x)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Hardware Acceleration</label>
+                            <select id="edit_hwaccel" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                                <option value="none">CPU Only (Standard)</option>
+                                <option value="nvenc">NVIDIA NVENC (GPU)</option>
+                                <option value="videotoolbox">Apple VideoToolbox (Mac)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: AI Prompt & Chat Assistant -->
+            <div id="tabContent_ai" class="left-tab-content hidden flex flex-col space-y-6">
+                <div class="bg-card border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col h-[480px]">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center">
+                            <i data-lucide="sparkles" class="w-4 h-4 mr-2 text-amber-400"></i> AI Pipeline Assistant
+                        </h2>
+                        <span class="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-medium">GPT-4 Powered</span>
+                    </div>
+
+                    <!-- Chat Messages Stream Container -->
+                    <div id="chatMessages" class="flex-1 bg-slate-900/80 border border-slate-800 rounded-xl p-4 overflow-y-auto space-y-3 font-sans text-xs">
+                        <div class="flex items-start space-x-2">
+                            <div class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                                <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+                            </div>
+                            <div class="bg-slate-800/80 p-3 rounded-2xl rounded-tl-none border border-slate-700/50 text-slate-200 leading-relaxed">
+                                Hello! I'm your FFmpeg AI Assistant. Tell me what you want to achieve (e.g. <i>"Compress video for WhatsApp below 25MB"</i> or <i>"Extract audio as high quality MP3"</i>) and I will configure the pipeline and parameters for you!
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Input -->
+                    <div class="mt-4 flex items-center space-x-2">
+                        <input type="text" id="chatInput" placeholder="Ask AI for pipeline recipes..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                        <button id="chatSendBtn" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center shadow-md">
+                            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT PANEL: Presets, Parameters & Generated Command (7 Cols) -->
+        <div class="lg:col-span-7 flex flex-col space-y-6">
+            
+            <!-- Preset Selector Tabs -->
+            <div class="bg-card border border-slate-800 rounded-2xl p-6 shadow-xl">
+                <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center">
+                    <i data-lucide="sliders" class="w-4 h-4 mr-2 text-blue-400"></i> Task Pipeline Presets
+                </h2>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5" id="presetTabs">
+                    <button data-preset="web_mp4" class="preset-btn px-3.5 py-2.5 rounded-xl text-xs font-semibold border text-left transition-all bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20 flex flex-col justify-between">
+                        <div class="flex items-center justify-between w-full mb-1">
+                            <i data-lucide="globe" class="w-4 h-4"></i>
+                            <span class="text-[10px] opacity-75">H.264</span>
+                        </div>
+                        Web MP4
+                    </button>
+                    <button data-preset="hls_stream" class="preset-btn px-3.5 py-2.5 rounded-xl text-xs font-semibold border text-left transition-all bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200 flex flex-col justify-between">
+                        <div class="flex items-center justify-between w-full mb-1">
+                            <i data-lucide="layers" class="w-4 h-4"></i>
+                            <span class="text-[10px] opacity-75">Adaptive</span>
+                        </div>
+                        HLS Package
+                    </button>
+                    <button data-preset="prores_master" class="preset-btn px-3.5 py-2.5 rounded-xl text-xs font-semibold border text-left transition-all bg-slate-900/60 border-slate-800 text-slate-400 hover;border-slate-700 hover:text-slate-200 flex flex-col justify-between">
+                        <div class="flex items-center justify-between w-full mb-1">
+                            <i data-lucide="film" class="w-4 h-4"></i>
+                            <span class="text-[10px] opacity-75">10-bit</span>
+                        </div>
+                        ProRes Master
+                    </button>
+                    <button data-preset="contact_sheet" class="preset-btn px-3.5 py-2.5 rounded-xl text-xs font-semibold border text-left transition-all bg-slate-900/60 border-slate-800 text-slate-400 hover;border-slate-700 hover:text-slate-200 flex flex-col justify-between">
+                        <div class="flex items-center justify-between w-full mb-1">
+                            <i data-lucide="grid" class="w-4 h-4"></i>
+                            <span class="text-[10px] opacity-75">Grid</span>
+                        </div>
+                        Contact Sheet
+                    </button>
+                    <button data-preset="loudnorm" class="preset-btn px-3.5 py-2.5 rounded-xl text-xs font-semibold border text-left transition-all bg-slate-900/60 border-slate-800 text-slate-400 hover;border-slate-700 hover:text-slate-200 flex flex-col justify-between">
+                        <div class="flex items-center justify-between w-full mb-1">
+                            <i data-lucide="volume-2" class="w-4 h-4"></i>
+                            <span class="text-[10px] opacity-75">EBU R128</span>
+                        </div>
+                        Audio Norm
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dynamic Parameter Tuning Panel -->
+            <div class="bg-card border border-slate-800 rounded-2xl p-6 shadow-xl">
+                <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center justify-between">
+                    <span class="flex items-center"><i data-lucide="settings-2" class="w-4 h-4 mr-2 text-blue-400"></i> Parameter Tuning</span>
+                    <span id="activePresetTitle" class="text-xs text-blue-400 font-normal">Web MP4 (H.264 / AAC)</span>
+                </h2>
+
+                <div class="space-y-4" id="parametersContainer">
+                    <!-- Injected via JS -->
+                </div>
+            </div>
+
+            <!-- Generated FFmpeg Command Output Box -->
+            <div class="bg-card border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center">
+                        <i data-lucide="terminal" class="w-4 h-4 mr-2 text-blue-400"></i> Generated FFmpeg Command
+                    </h2>
+                    <div class="flex items-center gap-2">
+                        <button id="saveToFolderBtn" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-colors shadow-md">Save to Folder</button>
+                        <button id="showFolderBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-colors">Show Folder</button>
+                        <button id="copyBtn" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-colors shadow-md active:scale-95 cursor-pointer">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                            <span>Copy</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="relative bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-blue-300 overflow-x-auto shadow-inner">
+                    <pre id="commandOutput" class="whitespace-pre-wrap break-all leading-relaxed">ffmpeg -y -i input.mp4 -vf "scale=-2:1080,format=yuv420p" -c:v libx264 -preset slow -crf 20 -c:a aac -b:a 192k -movflags +faststart output.mp4</pre>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <div id="executionModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <h3 class="text-sm font-bold text-slate-200">Executing FFmpeg Pipeline...</h3>
+                </div>
+                <button id="closeModalBtn" class="text-slate-400 hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="terminalLog" class="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-emerald-400 h-64 overflow-y-auto space-y-1">
+                <div>[FFmpeg Studio] Initializing worker process...</div>
+                <div>[FFmpeg Studio] Loading media input parameters...</div>
+            </div>
+            <div class="flex justify-end">
+                <button id="modalDoneBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition-colors">
+                    Close Terminal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="folderModal" class="fixed inset-0 bg-black/60 z-60 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-200">Output Folder Contents</h3>
+                <button id="closeFolderBtn" class="text-slate-400 hover:text-white p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="folderList" class="bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs text-blue-200 h-56 overflow-auto"></div>
+            <div class="flex justify-end">
+                <button id="downloadAllBtn" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium">Download All</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 z-50 bg-slate-900 border border-slate-800 text-slate-100 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3">
+        <div class="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <i data-lucide="check" class="w-4 h-4"></i>
+        </div>
+        <div>
+            <p class="text-xs font-semibold">Saved!</p>
+            <p class="text-[10px] text-slate-400">File written to selected output folder.</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+
+        // State variables
+        let currentPreset = 'web_mp4';
+        let uploadedFileName = 'input.mp4';
+        let outputFileName = 'output.mp4';
+        let outputDirHandle = null; // File System Access API directory handle
+
+        let params = {
+            resolution: '1080',
+            crf: '20',
+            preset: 'slow',
+            proresProfile: '3',
+            lufs: '-23.0',
+            fadeAudio: true,
+            hlsSegment: '6',
+            gridCols: '4',
+            gridRows: '4',
+            trimStart: '0',
+            trimDuration: '10',
+            crop: 'none',
+            watermark: '',
+            speed: '1.0',
+            hwaccel: 'none'
+        };
+
+        // Left Panel Tabs
+        const leftTabBtns = document.querySelectorAll('.left-tab-btn');
+        const leftTabContents = document.querySelectorAll('.left-tab-content');
+
+        leftTabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                leftTabBtns.forEach(b => {
+                    b.classList.remove('bg-blue-600', 'text-white', 'shadow-md');
+                    b.classList.add('text-slate-400');
+                });
+                btn.classList.add('bg-blue-600', 'text-white', 'shadow-md');
+                btn.classList.remove('text-slate-400');
+
+                const target = btn.getAttribute('data-left-tab');
+                leftTabContents.forEach(content => {
+                    content.classList.add('hidden');
+                });
+                document.getElementById(`tabContent_${target}`).classList.remove('hidden');
+            });
+        });
+
+        // Drag & Drop / Upload
+        const dropZone = document.getElementById('dropZone');
+        const videoUpload = document.getElementById('videoUpload');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileNameEl = document.getElementById('fileName');
+        const videoPreview = document.getElementById('videoPreview');
+        const previewPlaceholder = document.getElementById('previewPlaceholder');
+        const removeFileBtn = document.getElementById('removeFile');
+
+        dropZone.addEventListener('click', () => videoUpload.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500', 'bg-slate-900'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('border-blue-500', 'bg-slate-900'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500', 'bg-slate-900');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        videoUpload.addEventListener('change', (e) => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            uploadedFileName = file.name;
+            const base = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            outputFileName = `${base}_processed`;
+            
+            fileNameEl.textContent = file.name;
+            fileInfo.classList.remove('hidden');
+            dropZone.classList.add('hidden');
+
+            const objectUrl = URL.createObjectURL(file);
+            videoPreview.src = objectUrl;
+            videoPreview.classList.remove('hidden');
+            previewPlaceholder.classList.add('hidden');
+            videoPreview.load();
+            
+            updateCommand();
+        }
+
+        removeFileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            videoUpload.value = '';
+            uploadedFileName = 'input.mp4';
+            outputFileName = 'output.mp4';
+            fileInfo.classList.add('hidden');
+            dropZone.classList.remove('hidden');
+            videoPreview.src = '';
+            videoPreview.classList.add('hidden');
+            previewPlaceholder.classList.remove('hidden');
+            updateCommand();
+        });
+
+        // Editing Tools listeners
+        document.getElementById('edit_trimStart').addEventListener('input', (e) => { params.trimStart = e.target.value; updateCommand(); });
+        document.getElementById('edit_trimDuration').addEventListener('input', (e) => { params.trimDuration = e.target.value; updateCommand(); });
+        document.getElementById('edit_crop').addEventListener('change', (e) => { params.crop = e.target.value; updateCommand(); });
+        document.getElementById('edit_watermark').addEventListener('input', (e) => { params.watermark = e.target.value; updateCommand(); });
+        document.getElementById('edit_speed').addEventListener('change', (e) => { params.speed = e.target.value; updateCommand(); });
+        document.getElementById('edit_hwaccel').addEventListener('change', (e) => { params.hwaccel = e.target.value; updateCommand(); });
+
+        // Preset Switching
+        const presetTabs = document.querySelectorAll('.preset-btn');
+        const activePresetTitle = document.getElementById('activePresetTitle');
+        const parametersContainer = document.getElementById('parametersContainer');
+
+        presetTabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                presetTabs.forEach(b => {
+                    b.classList.remove('bg-blue-600', 'border-blue-500', 'text-white', 'shadow-lg', 'shadow-blue-500/20');
+                    b.classList.add('bg-slate-900/60', 'border-slate-800', 'text-slate-400');
+                });
+                btn.classList.remove('bg-slate-900/60', 'border-slate-800', 'text-slate-400');
+                btn.classList.add('bg-blue-600', 'border-blue-500', 'text-white', 'shadow-lg', 'shadow-blue-500/20');
+
+                currentPreset = btn.getAttribute('data-preset');
+                renderParameters();
+                updateCommand();
+            });
+        });
+
+        function renderParameters() {
+            let html = '';
+            if (currentPreset === 'web_mp4') {
+                activePresetTitle.textContent = 'Web MP4 (H.264 / AAC)';
+                html = `
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1.5">Target Resolution</label>
+                            <select id="param_resolution" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                                <option value="2160" ${params.resolution==='2160'?'selected':''}>4K UHD (2160p)</option>
+                                <option value="1080" ${params.resolution==='1080'?'selected':''}>Full HD (1080p)</option>
+                                <option value="720" ${params.resolution==='720'?'selected':''}>HD (720p)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1.5">Encoding Preset</label>
+                            <select id="param_preset" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                                <option value="fast" ${params.preset==='fast'?'selected':''}>Fast</option>
+                                <option value="medium" ${params.preset==='medium'?'selected':''}>Medium</option>
+                                <option value="slow" ${params.preset==='slow'?'selected':''}>Slow (High Compression)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs font-medium text-slate-400 mb-1.5">
+                            <span>CRF Quality Factor (<span id="crfVal">${params.crf}</span>)</span>
+                            <span class="text-[10px] text-slate-500">Lower = Higher Quality (18-22 Ideal)</span>
+                        </div>
+                        <input type="range" id="param_crf" min="14" max="28" value="${params.crf}" class="w-full accent-blue-500 bg-slate-900 rounded-lg cursor-pointer">
+                    </div>
+                `;
+            } else if (currentPreset === 'hls_stream') {
+                activePresetTitle.textContent = 'Adaptive HLS Package (.m3u8)';
+                html = `
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1.5">Segment Duration (sec)</label>
+                        <input type="number" id="param_hlsSegment" value="${params.hlsSegment}" min="2" max="10" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                    </div>
+                `;
+            } else if (currentPreset === 'prores_master') {
+                activePresetTitle.textContent = 'Apple ProRes Master';
+                html = `
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1.5">ProRes Profile</label>
+                        <select id="param_proresProfile" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                            <option value="3" ${params.proresProfile==='3'?'selected':''}>ProRes 422 HQ (Broadcast Master)</option>
+                            <option value="2" ${params.proresProfile==='2'?'selected':''}>ProRes 422 (Standard)</option>
+                        </select>
+                    </div>
+                `;
+            } else if (currentPreset === 'contact_sheet') {
+                activePresetTitle.textContent = 'Video Contact Sheet Grid';
+                html = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1.5">Grid Columns</label>
+                            <select id="param_gridCols" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                                <option value="3">3 Cols</option>
+                                <option value="4" selected>4 Cols</option>
+                                <option value="5">5 Cols</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1.5">Grid Rows</label>
+                            <select id="param_gridRows" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                                <option value="3">3 Rows</option>
+                                <option value="4" selected>4 Rows</option>
+                                <option value="5">5 Rows</option>
+                            </select>
+                        </div>
+                    </div>
+                `;
+            } else if (currentPreset === 'loudnorm') {
+                activePresetTitle.textContent = 'EBU R128 Loudness Normalization';
+                html = `
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1.5">Target Integrated Loudness</label>
+                        <select id="param_lufs" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
+                            <option value="-23.0">-23.0 LUFS (Broadcast)</option>
+                            <option value="-16.0" selected>-16.0 LUFS (YouTube / Web)</option>
+                        </select>
+                    </div>
+                `;
+            }
+
+            parametersContainer.innerHTML = html;
+            attachParameterListeners();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function attachParameterListeners() {
+            const res = document.getElementById('param_resolution');
+            if (res) res.addEventListener('change', (e) => { params.resolution = e.target.value; updateCommand(); });
+            const crf = document.getElementById('param_crf');
+            if (crf) crf.addEventListener('input', (e) => { params.crf = e.target.value; document.getElementById('crfVal').textContent = params.crf; updateCommand(); });
+            const prst = document.getElementById('param_preset');
+            if (prst) prst.addEventListener('change', (e) => { params.preset = e.target.value; updateCommand(); });
+            const pro = document.getElementById('param_proresProfile');
+            if (pro) pro.addEventListener('change', (e) => { params.proresProfile = e.target.value; updateCommand(); });
+            const hls = document.getElementById('param_hlsSegment');
+            if (hls) hls.addEventListener('input', (e) => { params.hlsSegment = e.target.value; updateCommand(); });
+            const lufs = document.getElementById('param_lufs');
+            if (lufs) lufs.addEventListener('change', (e) => { params.lufs = e.target.value; updateCommand(); });
+        }
+
+        // AI Chat Assistant Integration
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const chatSendBtn = document.getElementById('chatSendBtn');
+
+        chatSendBtn.addEventListener('click', sendAiMessage);
+        chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendAiMessage(); });
+
+        function sendAiMessage() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            // Append user msg
+            chatMessages.innerHTML += `
+                <div class="flex items-start justify-end space-x-2">
+                    <div class="bg-blue-600 text-white p-3 rounded-2xl rounded-tr-none max-w-[80%] leading-relaxed">
+                        ${escapeHtml(text)}
+                    </div>
+                </div>
+            `;
+            chatInput.value = '';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Simulate AI response & configuration
+            setTimeout(() => {
+                let aiReply = "I've analyzed your request and updated the pipeline parameters accordingly!";
+                if (text.toLowerCase().includes('instagram') || text.toLowerCase().includes('reel') || text.toLowerCase().includes('vertical')) {
+                    params.crop = '9:16';
+                    document.getElementById('edit_crop').value = '9:16';
+                    aiReply = "I have switched the crop ratio to 9:16 vertical for Instagram Reels/TikTok!";
+                } else if (text.toLowerCase().includes('watermark') || text.toLowerCase().includes('logo')) {
+                    params.watermark = 'FFmpeg Studio Pro';
+                    document.getElementById('edit_watermark').value = 'FFmpeg Studio Pro';
+                    aiReply = "I added the watermark text overlay to your video editing configuration.";
+                } else if (text.toLowerCase().includes('slow')) {
+                    params.speed = '0.5';
+                    document.getElementById('edit_speed').value = '0.5';
+                    aiReply = "I set playback speed to 0.5x slow motion.";
+                }
+
+                chatMessages.innerHTML += `
+                    <div class="flex items-start space-x-2">
+                        <div class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                            <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+                        </div>
+                        <div class="bg-slate-800/80 p-3 rounded-2xl rounded-tl-none border border-slate-700/50 text-slate-200 leading-relaxed">
+                            ${aiReply}
+                        </div>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                updateCommand();
+            }, 800);
+        }
+
+        function escapeHtml(string) {
+            return string.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        // Command Generator
+        const commandOutput = document.getElementById('commandOutput');
+        function updateCommand() {
+            let cmd = '';
+            const input = uploadedFileName;
+            const outputBase = outputFileName;
+
+            let vfFilters = [];
+            if (params.crop === '1:1') vfFilters.push("crop=in_h:in_h");
+            else if (params.crop === '9:16') vfFilters.push("crop=in_h*9/16:in_h");
+            else if (params.crop === '4:3') vfFilters.push("crop=in_h*4/3:in_h");
+
+            if (currentPreset === 'web_mp4') {
+                vfFilters.push(`scale=-2:${params.resolution}`);
+                vfFilters.push("format=yuv420p");
+                if (params.watermark) vfFilters.push(`drawtext=text='${params.watermark}':fontcolor=white:fontsize=24:x=20:y=20`);
+                
+                let hw = params.hwaccel === 'nvenc' ? '-c:v h264_nvenc' : (params.hwaccel === 'videotoolbox' ? '-c:v h264_videotoolbox' : `-c:v libx264 -preset ${params.preset} -crf ${params.crf}`);
+                let trim = params.trimDuration > 0 ? `-ss ${params.trimStart} -t ${params.trimDuration}` : '';
+                
+                cmd = `ffmpeg -y ${trim} -i "${input}" -vf "${vfFilters.join(',')}" ${hw} -c:a aac -b:a 192k -movflags +faststart "${outputBase}_1080p.mp4"`;
+            } else if (currentPreset === 'hls_stream') {
+                cmd = `ffmpeg -y -i "${input}" -f hls -hls_time ${params.hlsSegment} -hls_playlist_type vod "${outputBase}_hls/master.m3u8"`;
+            } else if (currentPreset === 'prores_master') {
+                cmd = `ffmpeg -y -i "${input}" -c:v prores_ks -profile:v ${params.proresProfile} -c:a pcm_s24le "${outputBase}_master.mov"`;
+            } else if (currentPreset === 'contact_sheet') {
+                cmd = `ffmpeg -y -i "${input}" -vf "fps=1/5,tile=${params.gridCols}x${params.gridRows}" "${outputBase}_sheet.jpg"`;
+            } else if (currentPreset === 'loudnorm') {
+                cmd = `ffmpeg -y -i "${input}" -af "loudnorm=I=${params.lufs}" "${outputBase}_norm.mp4"`;
+            }
+
+            commandOutput.textContent = cmd;
+        }
+
+        // File System Access API: Select output folder, save script, list files
+        const selectOutputBtn = document.getElementById('selectOutputBtn');
+        const outputFolderName = document.getElementById('outputFolderName');
+        const saveToFolderBtn = document.getElementById('saveToFolderBtn');
+        const showFolderBtn = document.getElementById('showFolderBtn');
+        const folderModal = document.getElementById('folderModal');
+        const folderList = document.getElementById('folderList');
+        const closeFolderBtn = document.getElementById('closeFolderBtn');
+        const downloadAllBtn = document.getElementById('downloadAllBtn');
+
+        selectOutputBtn.addEventListener('click', async () => {
+            if (!window.showDirectoryPicker) {
+                alert('Directory picker is not supported in this browser. Use Chrome/Edge or other Chromium-based browsers.');
+                return;
+            }
+            try {
+                outputDirHandle = await window.showDirectoryPicker();
+                outputFolderName.textContent = outputDirHandle.name || 'Selected Folder';
+                await listOutputFolder();
+            } catch (err) {
+                console.error('Folder selection cancelled or failed', err);
+            }
+        });
+
+        async function listOutputFolder() {
+            folderList.textContent = '';
+            if (!outputDirHandle) return;
+            try {
+                for await (const entry of outputDirHandle.values ? outputDirHandle.values() : outputDirHandle) {
+                    // some browsers give async iterator, but standard is entries()
+                }
+            } catch (e) {
+                // Fallback iteration
+            }
+            // Standard iteration using for await of entries()
+            try {
+                let lines = [];
+                for await (const [name, handle] of outputDirHandle.entries()) {
+                    lines.push(name + (handle.kind === 'directory' ? '/' : ''));
+                }
+                if (lines.length === 0) folderList.textContent = '(empty)';
+                else folderList.textContent = lines.join('\n');
+            } catch (err) {
+                folderList.textContent = 'Unable to read folder contents.';
+            }
+        }
+
+        saveToFolderBtn.addEventListener('click', async () => {
+            if (!outputDirHandle) {
+                alert('Please select an output folder first.');
+                return;
+            }
+            const cmd = commandOutput.textContent;
+            const filename = `${outputFileName || 'ffmpeg_command'}.sh`;
+            try {
+                const fh = await outputDirHandle.getFileHandle(filename, { create: true });
+                const writable = await fh.createWritable();
+                await writable.write('#!/bin/bash\n' + cmd + '\n');
+                await writable.close();
+                showSavedToast();
+                await listOutputFolder();
+            } catch (err) {
+                console.error('Failed to write file', err);
+                alert('Failed to write file to selected folder. Check permissions.');
+            }
+        });
+
+        showFolderBtn.addEventListener('click', async () => {
+            if (!outputDirHandle) {
+                alert('No folder selected. Click "Select Output Folder" first.');
+                return;
+            }
+            await listOutputFolder();
+            folderModal.classList.remove('hidden');
+        });
+
+        closeFolderBtn.addEventListener('click', () => folderModal.classList.add('hidden'));
+        downloadAllBtn.addEventListener('click', async () => {
+            // allow user to download listed files as zip? For simplicity, trigger download of each file by reading handles
+            if (!outputDirHandle) return;
+            try {
+                for await (const [name, handle] of outputDirHandle.entries()) {
+                    if (handle.kind === 'file') {
+                        const file = await handle.getFile();
+                        const url = URL.createObjectURL(file);
+                        const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+                        URL.revokeObjectURL(url);
+                    }
+                }
+            } catch (err) {
+                console.error('Download all failed', err);
+                alert('Failed to download files from folder.');
+            }
+        });
+
+        function showSavedToast() {
+            const t = document.getElementById('toast');
+            t.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 2500);
+        }
+
+        // Run Application Modal & Simulation
+        const runAppBtn = document.getElementById('runAppBtn');
+        const executionModal = document.getElementById('executionModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const modalDoneBtn = document.getElementById('modalDoneBtn');
+        const terminalLog = document.getElementById('terminalLog');
+
+        runAppBtn.addEventListener('click', async () => {
+            executionModal.classList.remove('hidden');
+            terminalLog.innerHTML = `<div>[FFmpeg Studio] Initializing pipeline worker...</div>`;
+            setTimeout(() => {
+                terminalLog.innerHTML += `<div>[FFmpeg Studio] Executing: ${escapeHtml(commandOutput.textContent)}</div>`;
+            }, 400);
+
+            let progress = 0;
+            const interval = setInterval(async () => {
+                progress += 20;
+                terminalLog.innerHTML += `<div>[frame=  ${progress * 15} fps= 30 q=28.0 size=   ${progress * 245}kB time=00:00:${progress < 10 ? '0'+progress : progress}.00 bitrate= 1240.5kbits/s speed=1.2x]</div>`;
+                terminalLog.scrollTop = terminalLog.scrollHeight;
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    terminalLog.innerHTML += `<div class="text-emerald-300 font-bold">[Success] Pipeline execution completed! Output saved.</div>`;
+                    // simulate writing a small output marker file when folder selected
+                    if (outputDirHandle) {
+                        try {
+                            const outName = `${outputFileName || 'output'}_marker.txt`;
+                            const fh = await outputDirHandle.getFileHandle(outName, { create: true });
+                            const w = await fh.createWritable();
+                            await w.write('Simulated output created by FFmpeg Studio at ' + new Date().toISOString());
+                            await w.close();
+                            await listOutputFolder();
+                        } catch (err) {
+                            console.error('Failed to write simulated output', err);
+                        }
+                    }
+                }
+            }, 600);
+        });
+
+        closeModalBtn.addEventListener('click', () => executionModal.classList.add('hidden'));
+        modalDoneBtn.addEventListener('click', () => executionModal.classList.add('hidden'));
+
+        // Copy Clipboard
+        const copyBtn = document.getElementById('copyBtn');
+        const toastEl = document.getElementById('toast');
+
+        copyBtn.addEventListener('click', () => {
+            const text = commandOutput.textContent;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(showSavedToast);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showSavedToast();
+            }
+        });
+
+        updateCommand();
+    </script>
+</body>
+</html>
